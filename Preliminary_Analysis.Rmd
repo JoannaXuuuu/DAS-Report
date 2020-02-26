@@ -1,0 +1,184 @@
+---
+title: "Preliminary Analysis - Beer Consumption"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r libs, message=FALSE, warning=FALSE,echo=FALSE}
+library(readr)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(moderndive)
+library(skimr)
+library(kableExtra)
+library(gridExtra)
+library(plotly)
+```
+
+```{r beer}
+beer <- read.csv("Consumo_cerveja.csv", header = TRUE, dec=",")
+col_names <- c("Date", "Average_Temp", "Min_Temp", "Max_Temp", "Precipitation","Day","Consumption")
+colnames(beer) <- col_names
+
+beer <- beer %>%
+  mutate(Consumption = as.numeric(levels(beer$Consumption))[beer$Consumption])
+
+beer <- beer %>%
+  filter(!(is.na(Day)))
+
+beer <- beer %>%
+  mutate(Day = replace(Day,Day==1,"Weekend"))%>%
+  mutate(Day = replace(Day,Day==0,"Weekday"))
+```
+# Introduction {#sec:Intro}
+
+# Exploratory Data Analysis {#sec:EDA}
+```{r sums}
+beer %>%
+    group_by(Day)%>%
+  summarise(Number=n(),Mean=mean(Consumption),SD=sd(Consumption),Min=min(Consumption),Q1=quantile(Consumption,0.25),Median=median(Consumption),Q3=quantile(Consumption,0.75), Max=max(Consumption))%>%
+  kable(caption = "\\label{sums} Summary statistics for beer consumption in Brazil in 2019")%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+```{r boxplot}
+ggplot(beer,aes(x=Day,y=Consumption)) +
+  geom_boxplot() +
+  labs(y="Beer Consumption (Litres)", title = "Beer Consumption in Brazil 2019")
+```
+
+# Formal Data Analysis {#sec:FDA}
+
+In order to analyse the data formally we fit the following linear model to the data,
+
+$$\widehat{\mbox{Consumption}} = \widehat{\alpha} +
+\widehat{\beta}_{\mbox{Weekend}} \cdot \mathbb{I}_{\mbox{Weekend}}(x) $$
+
+where \begin{itemize}
+\item $\widehat{\alpha}$, the intercept is the mean beer consumption for the baseline category of weekdays,
+\item $\widehat{\beta}_{\mbox{Weekend}}$ is the difference in mean beer consumption on weekends relative the the baseline category of weekdays and
+\item $\mathbb{I}_{\mbox{Weekend}}(x)$ is an indicator function where
+
+\end{itemize}
+$$\mathbb{I}_{\mbox{Weekend}}(x) = \left\{
+\begin{array}{ll}
+1 ~~~ \mbox{The} ~ x \mbox{th observation is at the weekend}, \\
+0 ~~~ \mbox{Otherwise.} \\
+\end{array}
+\right. $$
+
+```{r model1}
+model1 <- lm(Consumption ~ Day, data=beer)
+```
+
+When this model is fitted to the data the estimates of $\widehat{\alpha}$ (intercept) and $\widehat{\beta}_{\mbox{Male}}$ (DayWeekend) are returned.
+
+```{r estimates1}
+get_regression_table(model1) %>%
+  dplyr::select(term,estimate)%>%
+  kable(caption = "Parameter estimates from the linear model")%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+Thus the model determines that the average weekday beer consumption is 24 litres and that at the weekend this is, on average, 4.92 litres greater hence the average beer consumption at the weekend is 28.92 litres. These values agree with those seen in the summary statistcs.
+
+# Model Assumptions {#sec:Assum}
+
+```{r model1 rp}
+regression_points <- get_regression_points(model1)
+```
+
+```{r model1 res}
+ggplot(regression_points, aes(x = Day, y = residual)) +
+  geom_jitter(width = 0.1) + 
+  labs(y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue")
+```
+
+```{r model1 hist}
+ggplot(regression_points, aes(x = residual)) +
+  geom_histogram(bins= 10,colour = "white") +
+  labs(x = "Residual")
+```
+
+# Exploratory Data Analysis {#sec:EDA2}
+```{r cor}
+beer %>%
+  select(Consumption,Average_Temp, Precipitation)%>%
+  cor()
+```
+```{r scat1}
+ggplot(beer, aes(x=Average_Temp,y=Consumption)) +
+  geom_point() +
+  labs(x="Average Temperature (°C)", y="Alcohol Consumption (Litres)") +
+  geom_smooth(method="lm",se=FALSE)
+```
+```{r scat2}
+ggplot(beer, aes(x=Precipitation,y=Consumption)) +
+  geom_point() +
+  labs(x="Preciptiation (mm)", y="Alcohol Consumption (Litres)") +
+  geom_smooth(method="lm",se=FALSE)
+```
+
+```{r colin}
+ggplot(beer, aes(x=Precipitation,y=Average_Temp)) +
+  geom_point() +
+  labs(x="Preciptiation (mm)", y="Average Temperature (°C)") +
+  geom_smooth(method="lm",se=FALSE)
+```
+
+
+# Formal Data Analysis {#sec:FDA2}
+In order to analyse the data formally we fit the following linear model to the data,
+
+$$\widehat{y}_{i} = \widehat{\alpha} +
+\widehat{\beta}_{1}x_{1i} + \widehat{\beta}_{2}x_{2i} + \epsilon_{i}, ~~~~~ \epsilon \sim N(0,\sigma^{2}) $$
+
+where \begin{itemize}
+\item $\widehat{y}_{i}$ is the consumption on the $i$th day,
+\item $\widehat{\beta}_{1}$ is the coefficent for average temperature $(x_1)$
+\item $\widehat{\beta}_{2}$ is the coefficent for precipatation $(x_2)$ and
+\item $\epsilon_{i}$ is random component of the $i$th term
+\end{itemize}
+
+```{r mod2}
+model2 <- lm(Consumption ~ Average_Temp + Precipitation, data = beer)
+get_regression_table(model2)
+```
+
+$$y_{i} = 8.76 + 0.8 \cdot x_{1i} -0.07 \cdot x_{2i} $$
+
+# Model Assumptions {#sec:Assum2}
+
+```{r rp2}
+regression.points2 <- get_regression_points(model2)
+```
+
+```{r}
+ggplot(regression.points2, aes(x =Average_Temp, y = residual)) +
+  geom_point() +
+  labs(x="Average Temperture (C)",y = "Residual", title = "Residuals vs Average Temperature")  +
+  geom_hline(yintercept = 0, col = "blue", size = 1)
+```  
+```{r}
+ggplot(regression.points2, aes(x = Precipitation, y = residual)) +
+  geom_point() +
+  labs(x = "Precipitation (mm)", y = "Residual", title = "Residuals vs Precipitation") +
+  geom_hline(yintercept = 0, col = "blue", size = 1)
+```
+
+```{r}
+ggplot(regression.points2, aes(x = residual)) +
+  geom_histogram(bins=20,color = "white") +
+  labs(x = "Residual")
+```
+
+```{r mod3}
+model3 <- lm(Consumption ~ Average_Temp + Precipitation + Day, data = beer)
+get_regression_table(model3)
+```
+
+# Conclusions {#sec:Conc}
