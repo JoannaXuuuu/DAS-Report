@@ -1,0 +1,143 @@
+---
+title: "beer"
+author: "Joanna"
+date: "2020/2/24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, comment = NA, message = FALSE, warning = FALSE)
+```
+
+```{r, eval = TRUE}
+library(ggplot2)
+library(dplyr)
+library(moderndive)
+library(gapminder)
+library(skimr)
+library(kableExtra)
+library(gridExtra)
+library(broom)
+```
+
+```{r data, echo = FALSE, eval = TRUE, warning = FALSE, message = FALSE}
+beer <- read.csv("D:/学习/DAS/project/beer.csv")
+beer1 <- beer %>%
+  dplyr::select(TempMedia,TempMin,TempMax,Precipitation,Weekend,Consumption)
+beer1$TempMedia <- as.numeric(beer1$TempMedia)
+beer1$TempMin <- as.numeric(beer1$TempMin)
+beer1$TempMax <- as.numeric(beer1$TempMax)
+beer1$Precipitation <- as.numeric(beer1$Precipitation)
+beer2 <- beer1
+beer1[beer1$Weekend==0,]$Weekend <- "No"
+beer1[beer1$Weekend==1,]$Weekend <- "Yes"
+```
+
+
+# Introduction {#sec:Intro}
+
+
+# Exploratory Data Analysis {#sec:EDA}
+
+
+
+```{r beer = TRUE}
+skim <- beer1 %>%
+  skim(-Weekend)
+skim[,2:11] %>%
+  kable(digits = 2,
+        col.names = c("Variable", "Missing", "Complete", "Mean", "SD", "Min.", "1st Q.", "Median",
+                      "3rd Q.", "Max."),
+        caption = '\\label{tab:cor} correlation of the variables with Consumption.',
+        booktabs = TRUE, format = "latex") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+
+
+```{r, eval = TRUE, out.width = '80%', fig.align = "center", fig.cap = "\\label{fig:boxp} Consumption of 2015.", fig.pos = "H"}
+ggplot(beer1, aes(x = Weekend, y = Consumption)) +
+  geom_boxplot() +
+  labs(x = "Weekend", y = "Consumption(litros)") 
+```
+
+
+```{r beer = TRUE}
+Cor <- beer2 %>%
+  cor()
+Cor[1:5,6] %>%
+  kable(digits = 2,
+        caption = '\\label{tab:cor} correlation of the variables with Consumption.',
+        booktabs = TRUE, format = "latex") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+# Formal Data Analysis {#sec:FDA}
+
+```{r beer = TRUE}
+model1 <- glance(lm(Consumption ~ TempMax ,data = beer1))
+model2 <- glance(lm(Consumption ~ Precipitation,data = beer1))
+model3 <- glance(lm(Consumption ~ TempMax + Weekend + Precipitation,data = beer1))
+Models <-c('SLR(Temp)','SLR(Preci)','MLR')
+bind_rows(model1,model2,model3,.id="Model") %>%
+  select(Model,adj.r.squared,AIC,BIC) %>%
+  mutate(Model=Models) %>%
+  kable(digits = 2,caption = '\\label{tab:select} Model comparison values for different models.',
+        booktabs = TRUE, format = "latex") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+$$\widehat{\mbox{Consumption}} = \widehat{\alpha} + \widehat{\beta}_ {\mbox{Weekend}} \cdot \mathbb{I}_{\mbox{Weekend}}(x_i) + \widehat{\beta}_{\mbox{TempMax}} \cdot {\mbox{TempMax}_i} + \widehat{\beta}_{\mbox{Precipitation}} \cdot {\mbox{Precipitation}_i}$$
+where
+•the intercept $\widehat{\alpha}$ is the mean heart weight for the baseline category of Females;
+•$\widehat{\beta}_{\mbox{Weekend}}$ is the difference in the mean consumption of weekend; and
+•$\mathbb{I}_{\mbox{Weekend}}(x)$is an indicator function such that$$\mathbb{I}_{\mbox{Weekend}}(x)=\left\{\begin{array}{ll}1 ~~~ \mbox{if Weekend of} ~ x \mbox{th observation is Yes},\\0 ~~~ \mbox{Otherwise}.\\\end{array}\right.$$
+
+```{r beer = TRUE}
+int.model <-lm(Consumption ~ TempMax + Weekend + Precipitation, data = beer1)
+get_regression_table(int.model)[, 1:2] %>%
+  kable(caption = '\\label{tab:reg} Estimates of the intercept and slope from the MLR.',
+        booktabs = TRUE, format = "latex") %>%
+  kable_styling(latex_options = 'HOLD_position')
+```
+
+
+```{r beer = TRUE}
+regression_point <- get_regression_points(int.model)
+```
+
+
+```{r, eval = TRUE, out.width = '80%', fig.align = "center", fig.cap = "\\label{fig:res1} Residuals vs the explanatory variable Max Temperature by Weekend.", fig.pos = "H"}
+ggplot(regression_point,aes(x = TempMax, y = residual)) +
+  geom_point() +
+  labs(x = "Max Temperature", y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue", size = 1) +
+  facet_wrap(~ Weekend)
+```
+
+```{r, eval = TRUE, out.width = '80%', fig.align = "center", fig.cap = "\\label{fig:res2} Residuals vs the explanatory variable Precipitation by Weekend.", fig.pos = "H"}
+ggplot(regression_point,aes(x = Precipitation, y = residual)) +
+  geom_point() +
+  labs(x = "Preciptation", y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue", size = 1) +
+  facet_wrap(~ Weekend)
+```
+
+```{r, eval = TRUE, out.width = '80%', fig.align = "center", fig.cap = "\\label{fig:res3} Residuals vs the fitted values by weekend.", fig.pos = "H"}
+ggplot(regression_point,aes(x = Consumption_hat, y = residual)) +
+  geom_point() +
+  labs(x = "Fitted values", y = "Residual") +
+  geom_hline(yintercept = 0, col = "blue", size = 1) +
+  facet_wrap(~Weekend)
+```
+
+```{r, eval = TRUE, out.width = '80%', fig.align = "center", fig.cap = "\\label{fig:res4} Histograms of the residuals by Weekend.", fig.pos = "H"}
+ggplot(regression_point,aes(x = residual)) +
+  geom_histogram(binwidth = 1.25, color = "white") +
+  labs(x = "Residual") +
+  facet_wrap(~Weekend)
+```
+
+# Conclusions {#sec:Conc}
+
+
